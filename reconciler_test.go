@@ -166,7 +166,7 @@ func TestReconciler_Scale_NoScale(t *testing.T) {
 	r.Client = &client
 	r.MinStartedMachineN = "1"
 	r.MaxStartedMachineN = "2"
-	if err := r.Reconcile(context.Background()); err != nil {
+	if _, err := r.Reconcile(context.Background()); err != nil {
 		t.Fatal(err)
 	} else if got, want := r.Stats.NoScale.Load(), int64(1); got != want {
 		t.Fatalf("NoScale=%v, want %v", got, want)
@@ -228,7 +228,7 @@ func TestReconciler_Scale_Create(t *testing.T) {
 		r := fas.NewReconciler()
 		r.Client = &client
 		r.MinCreatedMachineN, r.MaxCreatedMachineN = "4", "4"
-		if err := r.Reconcile(context.Background()); err != nil {
+		if _, err := r.Reconcile(context.Background()); err != nil {
 			t.Fatal(err)
 		} else if got, want := invokeCreateN, 2; got != want {
 			t.Fatalf("createN=%v, want %v", got, want)
@@ -255,7 +255,7 @@ func TestReconciler_Scale_Create(t *testing.T) {
 		r := fas.NewReconciler()
 		r.Client = &client
 		r.MinCreatedMachineN = "1"
-		if err := r.Reconcile(context.Background()); err == nil || err.Error() != `no machine available to clone for scale up` {
+		if _, err := r.Reconcile(context.Background()); err == nil || err.Error() != `no machine available to clone for scale up` {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})
@@ -288,7 +288,7 @@ func TestReconciler_Scale_Destroy(t *testing.T) {
 		r := fas.NewReconciler()
 		r.Client = &client
 		r.MinCreatedMachineN, r.MaxCreatedMachineN = "2", "2"
-		if err := r.Reconcile(context.Background()); err != nil {
+		if _, err := r.Reconcile(context.Background()); err != nil {
 			t.Fatal(err)
 		} else if got, want := invokeDestroyN, 2; got != want {
 			t.Fatalf("destroyN=%v, want %v", got, want)
@@ -320,7 +320,7 @@ func TestReconciler_Scale_Destroy(t *testing.T) {
 		r := fas.NewReconciler()
 		r.Client = &client
 		r.MaxCreatedMachineN = "0"
-		if err := r.Reconcile(context.Background()); err != nil {
+		if _, err := r.Reconcile(context.Background()); err != nil {
 			t.Fatal(err)
 		}
 		if got, want := r.Stats.MachineDestroyed.Load(), int64(3); got != want {
@@ -359,7 +359,7 @@ func TestReconciler_Scale_Start(t *testing.T) {
 		r.MinStartedMachineN = "foo + 2"
 		r.MaxStartedMachineN = r.MinStartedMachineN
 		r.SetValue("foo", 1.0)
-		if err := r.Reconcile(context.Background()); err != nil {
+		if _, err := r.Reconcile(context.Background()); err != nil {
 			t.Fatal(err)
 		} else if got, want := invokeStartN, 2; got != want {
 			t.Fatalf("startN=%v, want %v", got, want)
@@ -402,7 +402,7 @@ func TestReconciler_Scale_Start(t *testing.T) {
 		r.Client = &client
 		r.MinStartedMachineN = "2"
 		r.MaxStartedMachineN = r.MinStartedMachineN
-		if err := r.Reconcile(context.Background()); err != nil {
+		if _, err := r.Reconcile(context.Background()); err != nil {
 			t.Fatal(err)
 		} else if got, want := invokeStartN, 3; got != want {
 			t.Fatalf("startN=%v, want %v", got, want)
@@ -442,7 +442,7 @@ func TestReconciler_Scale_Stop(t *testing.T) {
 		r.Client = &client
 		r.MinStartedMachineN = "1"
 		r.MaxStartedMachineN = "1"
-		if err := r.Reconcile(context.Background()); err != nil {
+		if _, err := r.Reconcile(context.Background()); err != nil {
 			t.Fatal(err)
 		} else if got, want := r.Stats.BulkStop.Load(), int64(1); got != want {
 			t.Fatalf("BulkStop=%v, want %v", got, want)
@@ -477,7 +477,7 @@ func TestReconciler_Scale_Stop(t *testing.T) {
 		r.Client = &client
 		r.MinStartedMachineN = "1"
 		r.MaxStartedMachineN = "1"
-		if err := r.Reconcile(context.Background()); err != nil {
+		if _, err := r.Reconcile(context.Background()); err != nil {
 			t.Fatal(err)
 		} else if got, want := r.Stats.MachineStopped.Load(), int64(2); got != want {
 			t.Fatalf("MachineStopped=%v, want %v", got, want)

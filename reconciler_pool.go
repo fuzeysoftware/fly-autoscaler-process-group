@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/newrelic/go-agent/v3/newrelic"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -62,6 +63,9 @@ type ReconcilerPool struct {
 	// NewReconciler is a constructor for building reconcilers.
 	// Called one or more times on Open().
 	NewReconciler func() *Reconciler
+
+	// New Relic application for error reporting and custom metrics. Optional.
+	NRApp *newrelic.Application
 
 	// Shared stats for all reconcilers.
 	Stats ReconcilerStats
@@ -288,11 +292,21 @@ func (p *ReconcilerPool) processWork(r *Reconciler, info appInfo) {
 	r.AppName = info.name
 	r.Client = info.client
 
+	// Start a New Relic background transaction for this reconciliation cycle.
+	var txn *newrelic.Transaction
+	if p.NRApp != nil {
+		txn = p.NRApp.StartTransaction("reconcile")
+		defer txn.End()
+		txn.AddAttribute("app", info.name)
+		txn.AddAttribute("processGroup", r.ProcessGroup)
+	}
+
 	release, err := p.flyClient.GetAppCurrentReleaseMachines(ctx, info.name)
 	if err != nil {
 		slog.Error("get current release failed",
 			slog.String("app", info.name),
 			slog.Any("err", err))
+		p.noticeNRError(txn, "get_current_release", err)
 		return
 	}
 
@@ -307,15 +321,34 @@ func (p *ReconcilerPool) processWork(r *Reconciler, info appInfo) {
 		slog.Error("metrics collection failed",
 			slog.String("app", info.name),
 			slog.Any("err", err))
+		p.noticeNRError(txn, "collect_metrics", err)
 		return
 	}
 
-	if err := r.Reconcile(ctx); err != nil {
+	result, err := r.Reconcile(ctx)
+	if err != nil {
 		slog.Error("reconciliation failed",
 			slog.String("app", info.name),
 			slog.Any("err", err))
+		p.noticeNRError(txn, "reconcile", err)
 		return
 	}
+
+	// Record machine counts as custom metrics.
+	if p.NRApp != nil && result != nil {
+		p.NRApp.RecordCustomMetric("MachineCount/Started", float64(result.StartedCount))
+		p.NRApp.RecordCustomMetric("MachineCount/Stopped", float64(result.StoppedCount))
+		p.NRApp.RecordCustomMetric("MachineCount/Created", float64(result.CreatedCount))
+	}
+}
+
+// noticeNRError reports an error to New Relic if the transaction is active.
+func (p *ReconcilerPool) noticeNRError(txn *newrelic.Transaction, operation string, err error) {
+	if txn == nil {
+		return
+	}
+	txn.AddAttribute("failedOperation", operation)
+	txn.NoticeError(err)
 }
 
 func (p *ReconcilerPool) RegisterPromMetrics(reg prometheus.Registerer) {
