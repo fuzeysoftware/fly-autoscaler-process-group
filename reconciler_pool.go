@@ -334,11 +334,15 @@ func (p *ReconcilerPool) processWork(r *Reconciler, info appInfo) {
 		return
 	}
 
-	// Record machine counts as custom metrics.
+	// Record machine counts as a custom event.
 	if p.NRApp != nil && result != nil {
-		p.NRApp.RecordCustomMetric("MachineCount/Started", float64(result.StartedCount))
-		p.NRApp.RecordCustomMetric("MachineCount/Stopped", float64(result.StoppedCount))
-		p.NRApp.RecordCustomMetric("MachineCount/Created", float64(result.CreatedCount))
+		p.NRApp.RecordCustomEvent("MachineCount", map[string]interface{}{
+			"app":          info.name,
+			"processGroup": r.ProcessGroup,
+			"started":      result.StartedCount,
+			"stopped":      result.StoppedCount,
+			"created":      result.CreatedCount,
+		})
 	}
 }
 
