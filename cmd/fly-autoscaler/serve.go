@@ -9,6 +9,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 
+	"github.com/newrelic/go-agent/v3/newrelic"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	fas "github.com/superfly/fly-autoscaler"
@@ -43,6 +44,24 @@ func (c *ServeCommand) Run(ctx context.Context, args []string) (err error) {
 	}
 	if err := c.Config.Validate(); err != nil {
 		return err
+	}
+
+	// Initialize New Relic agent (optional).
+	var nrApp *newrelic.Application
+	if c.Config.NewRelicLicenseKey != "" {
+		appName := c.Config.NewRelicAppName
+		if appName == "" {
+			appName = "fly-autoscaler"
+		}
+		nrApp, err = newrelic.NewApplication(
+			newrelic.ConfigAppName(appName),
+			newrelic.ConfigLicense(c.Config.NewRelicLicenseKey),
+			newrelic.ConfigDistributedTracerEnabled(true),
+		)
+		if err != nil {
+			return fmt.Errorf("cannot initialize new relic: %w", err)
+		}
+		slog.Info("new relic initialized", slog.String("app", appName))
 	}
 
 	// Instantiate clients for access org/apps & for scaling machines.
@@ -81,6 +100,7 @@ func (c *ServeCommand) Run(ctx context.Context, args []string) (err error) {
 		r.Collectors = collectors
 		return r
 	}
+	p.NRApp = nrApp
 	p.AppName = c.Config.AppName
 	p.OrganizationSlug = c.Config.Org
 	p.ReconcileInterval = c.Config.Interval

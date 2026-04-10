@@ -107,44 +107,57 @@ func reachbleMachines(machines []*fly.Machine) []*fly.Machine {
 	return reachable
 }
 
+// ReconcileResult contains the state observed during reconciliation.
+type ReconcileResult struct {
+	StartedCount int
+	StoppedCount int
+	CreatedCount int
+}
+
 // Reconcile scales the number of machines up, if needed. Machines should shut
-// themselves down to scale down. Returns the number of started machines, if any.
-func (r *Reconciler) Reconcile(ctx context.Context) error {
+// themselves down to scale down.
+func (r *Reconciler) Reconcile(ctx context.Context) (*ReconcileResult, error) {
 	// Compute number of machines based on expr & metrics
 	minCreatedN, hasMinCreatedN, err := r.CalcMinCreatedMachineN()
 	if err != nil {
-		return fmt.Errorf("compute minimum created machine count: %w", err)
+		return nil, fmt.Errorf("compute minimum created machine count: %w", err)
 	}
 	maxCreatedN, hasMaxCreatedN, err := r.CalcMaxCreatedMachineN()
 	if err != nil {
-		return fmt.Errorf("compute minimum created machine count: %w", err)
+		return nil, fmt.Errorf("compute minimum created machine count: %w", err)
 	}
 
 	minStartedN, hasMinStartedN, err := r.CalcMinStartedMachineN()
 	if err != nil {
-		return fmt.Errorf("compute minimum started machine count: %w", err)
+		return nil, fmt.Errorf("compute minimum started machine count: %w", err)
 	}
 	maxStartedN, hasMaxStartedN, err := r.CalcMaxStartedMachineN()
 	if err != nil {
-		return fmt.Errorf("compute minimum started machine count: %w", err)
+		return nil, fmt.Errorf("compute minimum started machine count: %w", err)
 	}
 
 	// Fetch list of running machines.
 	all, err := r.listMachines(ctx)
 	if err != nil {
-		return fmt.Errorf("list machines: %w", err)
+		return nil, fmt.Errorf("list machines: %w", err)
 	}
 	machines := reachbleMachines(all)
 
 	filtered := machinesInGroup(machines, r.ProcessGroup)
 	m := machinesByState(filtered)
 
+	result := &ReconcileResult{
+		StartedCount: len(m[fly.MachineStateStarted]),
+		StoppedCount: len(m[fly.MachineStateStopped]),
+		CreatedCount: len(filtered),
+	}
+
 	// Log out stats so we know exactly what the state of the world is.
 	slog.Info("reconciling",
 		slog.String("app", r.AppName),
 		slog.Group("current",
-			slog.Int("started", len(m[fly.MachineStateStarted])),
-			slog.Int("stopped", len(m[fly.MachineStateStopped])),
+			slog.Int("started", result.StartedCount),
+			slog.Int("stopped", result.StoppedCount),
 		),
 		slog.Group("target",
 			slog.Group("created",
@@ -162,29 +175,29 @@ func (r *Reconciler) Reconcile(ctx context.Context) error {
 	createdN := len(filtered)
 	if hasMinCreatedN && createdN < minCreatedN {
 		if len(filtered) == 0 {
-			return fmt.Errorf("no machine available to clone for scale up")
+			return nil, fmt.Errorf("no machine available to clone for scale up")
 		}
 
 		machine := filtered[0]
 		config := machine.Config
 		config.Image = machine.FullImageRef()
-		return r.createN(ctx, filtered[0].Config, machine.Region, minCreatedN-createdN)
+		return result, r.createN(ctx, filtered[0].Config, machine.Region, minCreatedN-createdN)
 	}
 	if hasMaxCreatedN && createdN > maxCreatedN {
-		return r.destroyN(ctx, m, createdN-maxCreatedN)
+		return result, r.destroyN(ctx, m, createdN-maxCreatedN)
 	}
 
 	// Determine if we need to start/stop machines.
 	startedN := len(m[fly.MachineStateStarted])
 	if hasMinStartedN && startedN < minStartedN {
-		return r.startN(ctx, m[fly.MachineStateStopped], minStartedN-startedN)
+		return result, r.startN(ctx, m[fly.MachineStateStopped], minStartedN-startedN)
 	}
 	if hasMaxStartedN && startedN > maxStartedN {
-		return r.stopN(ctx, m[fly.MachineStateStarted], startedN-maxStartedN)
+		return result, r.stopN(ctx, m[fly.MachineStateStarted], startedN-maxStartedN)
 	}
 
 	r.Stats.NoScale.Add(1)
-	return nil
+	return result, nil
 }
 
 func (r *Reconciler) createN(ctx context.Context, config *fly.MachineConfig, defaultRegion string, n int) error {

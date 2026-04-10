@@ -119,6 +119,8 @@ type Config struct {
 	Org                    string        `yaml:"org"`
 	Regions                []string      `yaml:"regions"`
 	ProcessGroup           string        `yaml:"process-group"`
+	NewRelicLicenseKey     string        `yaml:"new-relic-license-key"`
+	NewRelicAppName        string        `yaml:"new-relic-app-name"`
 	CreatedMachineN        string        `yaml:"created-machine-count"`
 	MinCreatedMachineN     string        `yaml:"min-created-machine-count"`
 	MaxCreatedMachineN     string        `yaml:"max-created-machine-count"`
@@ -158,6 +160,8 @@ func NewConfigFromEnv() (_ *Config, err error) {
 	c.MinStartedMachineN = os.Getenv("FAS_MIN_STARTED_MACHINE_COUNT")
 	c.MaxStartedMachineN = os.Getenv("FAS_MAX_STARTED_MACHINE_COUNT")
 	c.APIToken = os.Getenv("FAS_API_TOKEN")
+	c.NewRelicLicenseKey = os.Getenv("FAS_NEW_RELIC_LICENSE_KEY")
+	c.NewRelicAppName = os.Getenv("FAS_NEW_RELIC_APP_NAME")
 
 	if s := os.Getenv("FAS_PROCESS_GROUP"); s != "" {
 		c.ProcessGroup = s
