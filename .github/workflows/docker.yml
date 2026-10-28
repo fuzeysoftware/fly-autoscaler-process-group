@@ -28,7 +28,10 @@ jobs:
         id: login
         env:
           token_is_present: "${{ secrets.FLYIOBUILDS_DOCKERHUB_TOKEN && true }}"
-        if: ${{ env.token_is_present }}
+        if: >-
+          ${{ ((github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+               (github.event_name == 'release' && github.event.action == 'published')) &&
+              env.token_is_present == 'true' }}
         with:
           username: ${{ secrets.FLYIOBUILDS_DOCKERHUB_USERNAME }}
           password: ${{ secrets.FLYIOBUILDS_DOCKERHUB_TOKEN }}
@@ -48,7 +51,10 @@ jobs:
       - uses: docker/build-push-action@v5
         with:
           context: .
-          push: ${{ steps.login.outcome != 'skipped' }}
+          push: >-
+            ${{ ((github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+                 (github.event_name == 'release' && github.event.action == 'published')) &&
+                steps.login.outcome == 'success' }}
           platforms: "linux/amd64"
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
